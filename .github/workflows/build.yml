@@ -2,14 +2,9 @@ name: Build IPA
 
 on:
     workflow_dispatch:
-    # push:
-    #     branches:
-    #         - main
 
 permissions:
-    contents: write
-    pages: write
-    id-token: write
+    contents: read
 
 jobs:
     build:
@@ -40,9 +35,7 @@ jobs:
 
             - name: Generate AppIcon
               run: |
-                  echo "Installing appicon tool..."
                   brew install Nonchalant/appicon/appicon
-                  echo "Generating AppIcon..."
                   appicon app-icon.png --output-path ./PakePlus/Assets.xcassets/AppIcon.appiconset
 
             - name: Build for Release
@@ -53,24 +46,15 @@ jobs:
             - name: Package IPA
               run: |
                   APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -type d -name "PakePlus.app" | grep Release-iphoneos | head -n 1)
-                  echo "APP_PATH is $APP_PATH"
-                  mkdir -p Payload
+                  echo "APP_PATH=$APP_PATH"
+                  mkdir -p Payload export
                   cp -R "$APP_PATH" Payload/
-                  NAME="${{ env.NAME }}"
-                  VERSION="${{ env.VERSION }}"
-                  ISHTML="${{ env.ISHTML }}"
-                  ${ISHTML} && cp -R ./Scripts/www/* ./Payload/PakePlus.app/
-                  zip -r ${NAME}-${VERSION}.ipa Payload
-                  mkdir -p export
-                  mv ${NAME}-${VERSION}.ipa export/
+                  zip -r "export/${NAME}-${VERSION}.ipa" Payload
+                  ls -lh export
 
-            - name: Publish IPA
-              uses: softprops/action-gh-release@v1
+            - name: Upload IPA
+              uses: actions/upload-artifact@v4
               with:
-                  files: export/${{ env.NAME }}-${{ env.VERSION }}.ipa
-                  tag_name: '${{ env.NAME }}'
-                  name: '${{ env.NAME }} v${{ env.VERSION }}'
-                  body: '${{ env.PUBBODY }}'
-                  draft: false
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  name: ipa
+                  path: export/*.ipa
+                  if-no-files-found: error
