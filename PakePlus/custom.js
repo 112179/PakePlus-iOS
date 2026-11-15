@@ -124,125 +124,379 @@ window.open = function (url, target, features) {
 
 document.addEventListener('click', hookClick, { capture: true })
 /* ============================================================
-   PakePlus 移动端界面优化补丁  (injected by custom.js)
-   —— 目标：把桌面论坛页面变成顺手好用的手机 App 界面
+   98堂 App · 手机端界面改造
+   1) 强制走手机版模板  2) 整套卡片化皮肤  3) 广告清除
+   4) 底部悬浮工具栏（返回/刷新/回顶）
    ============================================================ */
 (function () {
-  if (window.__ppMobileUI) return;
-  window.__ppMobileUI = true;
+  'use strict';
 
-  var CSS = [
-    /* 1. 基础：禁止自动缩放 / 横向溢出 / 触控高亮 */
-    'html{-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;scroll-behavior:smooth}',
-    'body{overflow-x:hidden!important;-webkit-font-smoothing:antialiased;background:#f5f6f8}',
-    '*{-webkit-tap-highlight-color:transparent}',
+  var CSS_TEXT = `/* ============================================================
+   98堂 App · 手机端界面重设计
+   ============================================================ */
 
-    /* 2. 媒体自适应：图片不撑破屏幕，正文图带圆角 */
-    'img,video,canvas,iframe{max-width:100%!important}',
-    '.t_f img,.postmessage img,.post_content img,.message img,.plc img,.pl img,.entry-content img{height:auto!important;border-radius:10px;display:block;margin:8px auto}',
-    /* 头像/表情之类的小图保持原样 */
-    '.avatar img,.avt img,.smiley img,.emoji img,.face img,.icon img,em img,.e img{border-radius:50%;display:inline-block!important;margin:0!important}',
+/* ---------- 全局：广告清除（桌面/手机模板都杀） ---------- */
+.show-text, .show-text3, .show-text4, [class*="show-text"],
+.n5_tbxj, a.js-randomBg, .js-appJump,
+iframe[src*="ad"], ins.adsbygoogle, [id^="ad_"] {
+  display: none !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+}
 
-    /* 3. 表格/代码：可横向滚动，不破版 */
-    'table{max-width:100%!important}',
-    'pre,code{white-space:pre-wrap!important;word-break:break-word!important}',
-    'pre{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px}',
+/* ---------- 底部悬浮工具栏 ---------- */
+html.__pp_has_bar body { padding-bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
+#__pp_bar {
+  position: fixed !important;
+  z-index: 2147483000;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 26px;
+  background: rgba(28, 30, 34, .84);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
+  font-family: -apple-system, "PingFang SC", sans-serif;
+}
+#__pp_bar .__pp_btn {
+  width: 62px; height: 44px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: #fff; border-radius: 20px;
+  transition: background .15s;
+}
+#__pp_bar .__pp_btn:active { background: rgba(255, 255, 255, .16); }
+#__pp_bar .__pp_ic { font-size: 17px; line-height: 1; }
+#__pp_bar .__pp_lb { font-size: 9px; opacity: .72; margin-top: 2px; }
 
-    /* 4. 排版：字号/行高更耐看，段落留白 */
-    'body,.t_f,.postmessage,.post_content,.plc,.message{font-size:16px;line-height:1.7}',
-    '.t_f p,.postmessage p,.post_content p{margin:0 0 0.85em}',
-    '.t_f h1,.t_f h2,.t_f h3,.postmessage h1,.postmessage h2,.postmessage h3{line-height:1.4;margin:1em 0 .5em}',
-    'blockquote{border-left:3px solid #d8dbe0;padding:.4em .8em;margin:.8em 0;color:#666;background:#fafbfc;border-radius:0 8px 8px 0}',
+@media (max-width: 820px) {
 
-    /* 5. 列表：卡片化 + 触摸友好 */
-    '#threadlist li,.threadlist li,.trow,.tl li,.bm_c li{border-radius:12px}',
-    '.threadlist a,.trow a{min-height:44px}',
-    'a,button,input,select,textarea{touch-action:manipulation}',
-
-    /* 6. 顶部导航：吸顶 + 投影 */
-    '#hd,#top,.header{position:sticky!important;top:0;z-index:9999;backdrop-filter:saturate(180%) blur(12px)}',
-    '#hd,#top,.header{box-shadow:0 1px 0 rgba(0,0,0,.06),0 2px 12px rgba(0,0,0,.04)}',
-
-    /* 7. 底部固定条避开 Home 指示条 */
-    '.fixed-bottom,.bottom-bar,.tabbar,.footer-fixed{padding-bottom:env(safe-area-inset-bottom)!important}',
-
-    /* 8. 去掉桌面版固定宽度容器 */
-    '#wp,.wp,#wrap,.wrap,.container,.ct2_a{max-width:100%!important;width:auto!important}',
-
-    /* 9. 广告 / 浮动挡屏元素 */
-    '[id^="ad_"],[id*="_ad_"],[class^="ad-"],[class*=" ad-"],.adsbygoogle,ins.adsbygoogle,' +
-    'iframe[src*="ads"],iframe[src*="cpro"],.ad-float,.float-ad,.pull-ad,.gg,.ggtop,.advert{display:none!important}',
-
-    /* 10. 回到顶部按钮 */
-    '#__pp_top{position:fixed;right:16px;bottom:calc(24px + env(safe-area-inset-bottom));width:44px;height:44px;border-radius:22px;' +
-    'background:rgba(22,22,24,.72);color:#fff;display:none;align-items:center;justify-content:center;font-size:20px;' +
-    'z-index:99999;backdrop-filter:blur(8px);box-shadow:0 4px 16px rgba(0,0,0,.22);opacity:0;transition:opacity .2s}',
-    '#__pp_top.show{display:flex;opacity:1}'
-  ].join('');
-
-  function inject() {
-    try {
-      // viewport 修正：保证 1:1 显示且不出现横向滚动
-      var vp = document.querySelector('meta[name="viewport"]');
-      if (!vp) {
-        vp = document.createElement('meta');
-        vp.name = 'viewport';
-        document.head.appendChild(vp);
-      }
-      vp.setAttribute('content',
-        'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
-
-      var style = document.createElement('style');
-      style.id = '__pp_mobile_ui';
-      style.textContent = CSS;
-      document.head.appendChild(style);
-
-      // 图片懒加载
-      var imgs = document.querySelectorAll('img:not([loading])');
-      for (var i = 0; i < imgs.length; i++) {
-        var im = imgs[i];
-        im.setAttribute('decoding', 'async');
-        if (i > 3) im.setAttribute('loading', 'lazy');
-      }
-
-      // target=_blank 在 WebView 里会开新窗口导致点不动 → 改为当前页跳转
-      document.addEventListener('click', function (e) {
-        var a = e.target;
-        while (a && a.tagName !== 'A') a = a.parentElement;
-        if (!a) return;
-        var href = a.getAttribute('href');
-        if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
-        if (a.target === '_blank' || a.getAttribute('target') === '_blank') {
-          e.preventDefault();
-          location.href = a.href;
-        }
-      }, true);
-      // 回到顶部
-      var btn = document.createElement('div');
-      btn.id = '__pp_top';
-      btn.innerHTML = '&#8593;';
-      btn.addEventListener('click', function () {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      });
-      document.body.appendChild(btn);
-      var ticking = false;
-      window.addEventListener('scroll', function () {
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(function () {
-          var y = window.pageYOffset || document.documentElement.scrollTop;
-          btn.classList.toggle('show', y > 600);
-          ticking = false;
-        });
-      }, { passive: true });
-    } catch (err) {
-      console.warn('[pp-ui]', err);
-    }
+  :root {
+    --pp-bg: #f2f3f5;
+    --pp-card: #ffffff;
+    --pp-text: #16181d;
+    --pp-sub: #8b909a;
+    --pp-brand: #c2185b;
+    --pp-line: rgba(16, 24, 40, .07);
+    --pp-radius: 14px;
   }
 
+  /* ---------- 1. 基础 ---------- */
+  html, body { background: var(--pp-bg) !important; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif !important;
+    color: var(--pp-text);
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
+  }
+  * { -webkit-tap-highlight-color: transparent; }
+  a { text-decoration: none; }
+  img { max-width: 100%; }
+
+  /* ---------- 2. 顶部栏 ---------- */
+  .n5_tbys {
+    position: sticky !important; top: 0; z-index: 999;
+    display: flex !important; align-items: center; gap: 10px;
+    padding: 8px 14px !important;
+    margin: 0 !important;
+    background: rgba(255, 255, 255, .94) !important;
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    backdrop-filter: saturate(180%) blur(14px);
+    border: 0 !important;
+    border-bottom: 1px solid var(--pp-line) !important;
+    box-shadow: 0 1px 12px rgba(16, 24, 40, .04);
+  }
+  .n5_tbys .back_btn {
+    width: 34px; height: 34px; flex: 0 0 34px;
+    display: flex !important; align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: #f1f2f4;
+    color: #333 !important;
+  }
+  .n5_tbys .back_btn .iconfont { font-size: 17px !important; }
+  .n5_tbys .dqym {
+    flex: 1 1 auto; min-width: 0;
+    font-size: 16px !important; font-weight: 600; color: var(--pp-text) !important;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    line-height: 34px;
+  }
+  .n5_tbys .lbsx, .n5_tbys .txbz {
+    flex: 0 0 auto; font-size: 13px; color: var(--pp-sub) !important;
+    padding: 6px 10px; border-radius: 16px; background: #f1f2f4;
+  }
+
+  /* ---------- 3. 排序 / 筛选条 ---------- */
+  .n5_ztflsx, .n5_zdtys {
+    position: sticky !important; top: 51px; z-index: 98;
+    background: rgba(255, 255, 255, .96) !important;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border: 0 !important; border-bottom: 1px solid var(--pp-line) !important;
+    margin: 0 !important; padding: 6px 12px !important;
+  }
+  .n5_zdtys .orderby { display: flex !important; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .n5_zdtys .orderby::-webkit-scrollbar { display: none; }
+  .n5_zdtys .orderby a {
+    flex: 0 0 auto; font-size: 13px !important; line-height: 1;
+    padding: 8px 14px; border-radius: 999px;
+    background: #f1f2f4; color: #4b5563 !important;
+    border: 0 !important;
+  }
+  .n5_zdtys .orderby a.xw1, .n5_zdtys .orderby a.on {
+    background: var(--pp-brand) !important; color: #fff !important; font-weight: 600;
+  }
+  .n5_ztflsx ul, .n5_zdtys ul { display: flex !important; flex-wrap: nowrap; gap: 8px; overflow-x: auto; padding: 4px 0; }
+  .n5_ztflsx li, .n5_zdtys li { flex: 0 0 auto; font-size: 13px; }
+
+  /* ---------- 4. 帖子列表卡片 ---------- */
+  .threadlist { background: transparent !important; padding: 8px 12px 16px !important; }
+  .n5_htmk {
+    background: var(--pp-card) !important;
+    border: 0 !important;
+    border-radius: var(--pp-radius) !important;
+    margin: 10px 0 !important;
+    padding: 12px 14px 10px !important;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 6px 18px rgba(16, 24, 40, .05);
+    overflow: hidden;
+  }
+
+  /* 作者行 */
+  .n5_htmktb { display: flex !important; align-items: center; border: 0 !important; padding: 0 0 8px !important; }
+  .n5_mktbys { display: flex !important; align-items: center; gap: 8px; width: 100%; }
+  .n5_mktbtx img, .n5_mktbtx img.user_avatar {
+    width: 28px !important; height: 28px !important;
+    border-radius: 50% !important; object-fit: cover;
+    display: block !important;
+  }
+  .n5_mktbmc { display: flex !important; align-items: center; gap: 6px; font-size: 13px !important; color: #5b6270 !important; }
+  .n5_mktbmc a { color: #5b6270 !important; font-weight: 500; }
+  .n5_mktbsj { margin-left: auto !important; font-size: 12px !important; color: #a0a5ae !important; }
+
+  /* 标题 */
+  .n5_htnrwz { padding: 0 !important; border: 0 !important; }
+  .n5_htnrjj, p.n5_htnrjj {
+    margin: 0 !important; padding: 0 !important; border: 0 !important;
+    line-height: 1.45 !important;
+  }
+  .n5_htnrjj a {
+    font-size: 16px !important; line-height: 1.45 !important;
+    font-weight: 600 !important; color: var(--pp-text) !important;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; word-break: break-word;
+  }
+  .n5_htnrjj a span, .n5_htnrjj em {
+    font-size: 11px !important; font-weight: 500;
+    padding: 1px 6px; margin-right: 4px; border-radius: 5px;
+    background: #fdecef; color: var(--pp-brand) !important;
+    vertical-align: 1px;
+  }
+
+  /* 缩略图 */
+  .n5_htnrtp { margin: 10px 0 0 !important; border: 0 !important; padding: 0 !important; }
+  .n5_htnrtp a { display: block !important; }
+  .n5_htnrtp img {
+    width: 100% !important; max-height: 220px !important;
+    object-fit: cover; border-radius: 10px !important; display: block;
+  }
+  .n5_htnrtp .ztyzjj { display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .n5_htnrtp .ztyzjj img { height: 100px !important; }
+
+  /* 底部动作条 */
+  .n5_htnrxx {
+    display: flex !important; align-items: center; gap: 18px;
+    margin-top: 10px !important; padding-top: 9px !important;
+    border: 0 !important; border-top: 1px solid var(--pp-line) !important;
+    font-size: 12px !important;
+  }
+  .n5_htnrxx > div { display: flex !important; align-items: center; gap: 5px; color: #9aa0a8 !important; }
+  .n5_htnrxx a { color: #9aa0a8 !important; font-size: 12px !important; }
+  .n5_htnrxx .iconfont, .n5_htnrxx em { font-size: 14px !important; color: #9aa0a8 !important; }
+
+  /* ---------- 5. 帖子详情 ---------- */
+  .plc {
+    background: var(--pp-card) !important;
+    border: 0 !important;
+    border-radius: var(--pp-radius) !important;
+    margin: 10px 12px !important;
+    padding: 12px 14px !important;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 6px 18px rgba(16, 24, 40, .05);
+  }
+  .n5_nrytb { border: 0 !important; padding: 0 !important; }
+  .n5_nrhytx img {
+    width: 34px !important; height: 34px !important;
+    border-radius: 50% !important; object-fit: cover;
+  }
+  .n5_nrhyxx { font-size: 13px !important; color: #6b7280 !important; }
+  .n5_nrhyxx a { color: #303540 !important; font-weight: 600; }
+  .n5_nrlcbz, .n5_nrylc { font-size: 11px !important; color: #a0a5ae !important; }
+
+  .message, .message * {
+    font-size: 16px !important;
+    line-height: 1.75 !important;
+    color: #1f2329;
+    word-break: break-word;
+  }
+  .message p { margin: 0 0 .85em !important; }
+  .message h1, .message h2, .message h3 { line-height: 1.4 !important; margin: 1em 0 .5em !important; }
+  .message img {
+    height: auto !important; max-width: 100% !important;
+    border-radius: 10px !important; display: block; margin: 10px auto;
+  }
+  .message blockquote {
+    margin: .8em 0 !important; padding: .5em .9em !important;
+    background: #f7f8fa !important; border-left: 3px solid #dfe3e8 !important;
+    border-radius: 0 8px 8px 0; color: #5b6270 !important;
+  }
+  .message pre, .message code {
+    white-space: pre-wrap !important; word-break: break-word !important;
+    font-size: 13px !important; border-radius: 8px;
+  }
+
+  /* 楼层操作 */
+  .n5_zthfcz, .n5_hfczgd, .hm { border: 0 !important; }
+  .n5_zthfcz a, .hm a, .pi a { color: #9aa0a8 !important; font-size: 12px !important; }
+
+  /* ---------- 6. 分页 ---------- */
+  .page, .pg {
+    display: flex !important; flex-wrap: wrap; gap: 8px;
+    justify-content: center; padding: 14px 12px 20px !important;
+    background: transparent !important; border: 0 !important;
+  }
+  .page a, .page strong, .pg a, .pg strong {
+    min-width: 36px; height: 36px; line-height: 36px !important;
+    padding: 0 12px !important; border-radius: 10px !important;
+    background: #fff !important; border: 0 !important;
+    font-size: 13px !important; text-align: center;
+    box-shadow: 0 1px 3px rgba(16, 24, 40, .06);
+    color: #4b5563 !important;
+  }
+  .page strong, .pg strong, .page .curpage, .pg .curpage {
+    background: var(--pp-brand) !important; color: #fff !important;
+  }
+  .page label, .pg label { display: none !important; }
+
+  /* ---------- 7. 回到顶部交给工具栏，隐藏站点自带 ---------- */
+  a.scrolltop, .scrolltop { display: none !important; }
+
+  /* ---------- 8. 收尾 ---------- */
+  .h10, .h15 { height: 8px !important; }
+  hr { border: 0; border-top: 1px solid var(--pp-line); }
+}
+`;
+
+  /* ---------- A. 尽早执行：把页面拉回手机版 ---------- */
+  function forceMobileTemplate() {
+    // Discuz 用 mobile=2 参数或 mobile cookie 切换触屏模板
+    if (!/(^|;\s*)mobile=/.test(document.cookie)) {
+      document.cookie = 'mobile=2; path=/; max-age=2592000';
+    }
+    var html = document.documentElement;
+    // 桌面模板特征：#wp + #nv + 没有 .n5_tbys
+    var isDesktop = document.querySelector('#wp') && document.querySelector('#nv') &&
+                    !document.querySelector('.n5_tbys');
+    if (!isDesktop) return;
+    if (sessionStorage.getItem('__pp_m')) return;
+    sessionStorage.setItem('__pp_m', '1');
+    try {
+      var u = new URL(location.href);
+      if (u.searchParams.get('mobile') !== '2') {
+        u.searchParams.set('mobile', '2');
+        location.replace(u.toString());
+      }
+    } catch (e) {}
+  }
+
+  /* ---------- B. 注入皮肤 ---------- */
+  function injectCss() {
+    var style = document.createElement('style');
+    style.id = '__pp_ui';
+    style.textContent = CSS_TEXT;
+    (document.head || document.documentElement).appendChild(style);
+
+    var vp = document.querySelector('meta[name="viewport"]');
+    if (!vp) {
+      vp = document.createElement('meta');
+      vp.name = 'viewport';
+      (document.head || document.documentElement).appendChild(vp);
+    }
+    vp.setAttribute('content',
+      'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
+  }
+
+  /* ---------- C. 底部工具栏 ---------- */
+  function addToolbar() {
+    if (document.getElementById('__pp_bar')) return;
+    if (document.querySelector('.n5_tbys') === null && document.querySelector('#wp') === null) return;
+
+    var bar = document.createElement('div');
+    bar.id = '__pp_bar';
+
+    var items = [
+      { k: 'back', icon: '‹', label: '返回' },
+      { k: 'reload', icon: '⟳', label: '刷新' },
+      { k: 'top', icon: '↑', label: '顶部' }
+    ];
+    items.forEach(function (it) {
+      var b = document.createElement('div');
+      b.className = '__pp_btn';
+      b.innerHTML = '<span class="__pp_ic">' + it.icon + '</span><span class="__pp_lb">' + it.label + '</span>';
+      b.addEventListener('click', function () {
+        if (it.k === 'back') {
+          if (history.length > 1) history.back();
+          else location.href = location.pathname;
+        } else if (it.k === 'reload') {
+          location.reload();
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, { passive: true });
+      bar.appendChild(b);
+    });
+
+    (document.body || document.documentElement).appendChild(bar);
+    document.documentElement.classList.add('__pp_has_bar');
+  }
+
+  /* ---------- D. 细节修复 ---------- */
+  function fixes() {
+    // 图片懒加载 + 异步解码
+    var imgs = document.querySelectorAll('img:not([loading])');
+    for (var i = 0; i < imgs.length; i++) {
+      imgs[i].setAttribute('decoding', 'async');
+      if (i > 2) imgs[i].setAttribute('loading', 'lazy');
+    }
+
+    // WebView 里 target=_blank 打不开 → 改成当前窗口跳转
+    document.addEventListener('click', function (e) {
+      var a = e.target;
+      while (a && a.tagName !== 'A') a = a.parentElement;
+      if (!a) return;
+      var href = a.getAttribute('href');
+      if (!href || href.charAt(0) === '#' || href.indexOf('javascript:') === 0) return;
+      if (a.target === '_blank') {
+        e.preventDefault();
+        location.href = a.href;
+      }
+    }, true);
+  }
+
+  /* ---------- 启动 ---------- */
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', inject);
+    document.addEventListener('DOMContentLoaded', function () {
+      try { forceMobileTemplate(); } catch (e) {}
+      try { injectCss(); } catch (e) {}
+      try { addToolbar(); } catch (e) {}
+      try { fixes(); } catch (e) {}
+    });
   } else {
-    inject();
+    try { forceMobileTemplate(); } catch (e) {}
+    try { injectCss(); } catch (e) {}
+    try { addToolbar(); } catch (e) {}
+    try { fixes(); } catch (e) {}
   }
 })();
