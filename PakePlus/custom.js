@@ -137,12 +137,18 @@ document.addEventListener('click', hookClick, { capture: true })
 
 /* ---------- 全局：广告清除（桌面/手机模板都杀） ---------- */
 .show-text, .show-text3, .show-text4, [class*="show-text"],
-.n5_tbxj, a.js-randomBg, .js-appJump,
+.n5_tbxj,
 iframe[src*="ad"], ins.adsbygoogle, [id^="ad_"] {
   display: none !important;
   height: 0 !important;
   width: 0 !important;
   overflow: hidden !important;
+}
+
+/* 广告容器内的外链一律不占位 */
+.show-text a, .show-text3 a, .show-text4 a,
+[class*="show-text"] a, [class*="show-text"] .item {
+  display: none !important;
 }
 
 /* ---------- 底部悬浮工具栏 ---------- */
@@ -342,6 +348,7 @@ html.__pp_has_bar body { padding-bottom: calc(76px + env(safe-area-inset-bottom)
     word-break: break-word;
   }
   .message p { margin: 0 0 .85em !important; }
+  .message a { color: var(--pp-brand) !important; text-decoration: underline; text-underline-offset: 2px; }
   .message h1, .message h2, .message h3 { line-height: 1.4 !important; margin: 1em 0 .5em !important; }
   .message img {
     height: auto !important; max-width: 100% !important;
