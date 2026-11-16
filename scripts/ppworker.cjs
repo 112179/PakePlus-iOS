@@ -346,6 +346,13 @@ const main = async () => {
     // update ios applicationId
     await updateProject(id, showName, direction)
 
+    // 保持配置文件与系统显示的版本一致
+    const projectPath = path.join(__dirname, '../PakePlus.xcodeproj/project.pbxproj')
+    let project = fs.readFileSync(projectPath, 'utf8')
+    project = project.replace(/MARKETING_VERSION = .*?;/g, `MARKETING_VERSION = ${version};`)
+    project = project.replace(/CURRENT_PROJECT_VERSION = .*?;/g, 'CURRENT_PROJECT_VERSION = 4;')
+    fs.writeFileSync(projectPath, project)
+
     // set github env
     setGithubEnv(name, version, pubBody, isHtml)
 
