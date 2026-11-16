@@ -180,6 +180,60 @@ html.__pp_has_bar body { padding-bottom: calc(76px + env(safe-area-inset-bottom)
 #__pp_bar .__pp_ic { font-size: 17px; line-height: 1; }
 #__pp_bar .__pp_lb { font-size: 9px; opacity: .72; margin-top: 2px; }
 
+
+/* ---------- 快捷按钮组 ---------- */
+#__pp_qa {
+  position: fixed; right: 14px;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  z-index: 2147482500;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+  font-family: -apple-system, "PingFang SC", sans-serif;
+}
+#__pp_qa .pp_qa_list { display: none; flex-direction: column; gap: 8px; align-items: flex-end; }
+#__pp_qa.open .pp_qa_list { display: flex; }
+#__pp_qa .pp_qa_item {
+  display: flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 14px; border-radius: 18px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 4px 14px rgba(16, 24, 40, .16);
+  font-size: 13px; font-weight: 600; color: #2b2f36;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+#__pp_qa .pp_qa_item:active { transform: scale(.96); }
+#__pp_qa .pp_qa_item.on { background: #c2185b; color: #fff; }
+#__pp_qa .pp_qa_item i { font-style: normal; font-size: 15px; }
+#__pp_qa .pp_qa_fab {
+  width: 44px; height: 44px; border-radius: 22px;
+  background: rgba(28, 30, 34, .86); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .25);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+#__pp_qa.open .pp_qa_fab { background: #c2185b; }
+
+/* ---------- toast ---------- */
+#__pp_toast {
+  position: fixed; left: 50%;
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  transform: translate(-50%, 10px);
+  background: rgba(24, 26, 30, .9);
+  color: #fff; font-size: 13px; padding: 9px 16px; border-radius: 18px;
+  opacity: 0; pointer-events: none; transition: .22s;
+  z-index: 2147483000; max-width: 78vw; text-align: center;
+  font-family: -apple-system, "PingFang SC", sans-serif;
+}
+#__pp_toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---------- 屏蔽用户 ---------- */
+.pp-blockbtn { display: inline-block; margin-left: 10px; font-size: 12px; color: #9aa0a8; }
+.pp-blockbtn.on { color: #c2185b; }
+.pp-blocked > * { display: none !important; }
+.pp-blocked > .pp-unblock {
+  display: block !important;
+  padding: 16px; text-align: center; font-size: 13px; color: #8b909a;
+}
+
 @media (max-width: 820px) {
 
   :root {
@@ -505,5 +559,286 @@ html.__pp_has_bar body { padding-bottom: calc(76px + env(safe-area-inset-bottom)
     try { injectCss(); } catch (e) {}
     try { addToolbar(); } catch (e) {}
     try { fixes(); } catch (e) {}
+  }
+})();
+
+/* ============================================================
+   快捷操作层（移植自「色花堂 98堂 强化脚本」的核心功能）
+   · 帖子页悬浮按钮：收藏 / 评分 / 购买 / 回复解锁 / 磁力 / 附件
+   · 收藏 & 评分本地状态缓存
+   · 屏蔽用户（长按/点击楼层里的 🙈，被屏蔽楼层折叠）
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.__ppQuick) return;
+  window.__ppQuick = true;
+
+  var LS = {
+    get: function (k, d) {
+      try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; }
+    },
+    set: function (k, v) {
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+    }
+  };
+
+  /* ---------------- 基础工具 ---------------- */
+  function getTid() {
+    var m = location.search.match(/[?&]tid=(\d+)/);
+    if (m) return m[1];
+    var n = location.pathname.match(/thread-(\d+)-/);
+    return n ? n[1] : null;
+  }
+
+  function firstOf(selectors) {
+    for (var i = 0; i < selectors.length; i++) {
+      var e = document.querySelector(selectors[i]);
+      if (e) return e;
+    }
+    return null;
+  }
+
+  // 四级 formhash（X3.5 全局变量可能为 null）
+  function getFormHash() {
+    try {
+      if (window.formhash) return String(window.formhash);
+      if (window.verifyhash) return String(window.verifyhash);
+    } catch (e) {}
+    var f = document.querySelector('input[name="formhash"]');
+    if (f && f.value) return f.value;
+    var meta = document.querySelector('meta[name="formhash"]');
+    if (meta && meta.content) return meta.content;
+    var scripts = document.querySelectorAll('script:not([src])');
+    for (var i = 0; i < scripts.length; i++) {
+      var m = (scripts[i].textContent || '').match(/(?:formhash|verifyhash)\s*=\s*['"]([0-9a-zA-Z]{8})['"]/);
+      if (m) return m[1];
+    }
+    return '';
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = document.getElementById('__pp_toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = '__pp_toast';
+      (document.body || document.documentElement).appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+
+  function findMagnet() {
+    var cands = document.querySelectorAll('.blockcode, div.blockcode, blockquote, td.t_f');
+    for (var i = 0; i < cands.length; i++) {
+      if (/magnet:\?xt=urn:btih/i.test(cands[i].textContent || '')) return cands[i];
+    }
+    return null;
+  }
+
+  /* ---------------- 收藏（本地状态 + 原生点击 / AJAX 兜底） ---------------- */
+  function favStore() { return LS.get('pp_fav', {}); }
+  function setFav(tid, favid) {
+    var s = favStore();
+    if (favid) s[tid] = favid; else delete s[tid];
+    LS.set('pp_fav', s);
+  }
+
+  function doFavorite(tid, nativeEl, btn) {
+    var s = favStore();
+    var favid = s[tid];
+
+    if (favid) {
+      // 取消收藏
+      var fd = new FormData();
+      fd.set('formhash', getFormHash());
+      fd.set('handlekey', 'a_delete_' + favid);
+      fd.set('deletesubmit', 'true');
+      fetch('home.php?mod=spacecp&ac=favorite&op=delete&favid=' + favid + '&type=all&inajax=1',
+        { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(function () {
+          setFav(tid, 0);
+          btn.classList.remove('on');
+          toast('已取消收藏');
+        })
+        .catch(function () { toast('取消失败，请检查登录状态'); });
+      return;
+    }
+
+    if (nativeEl) { nativeEl.click(); setFav(tid, 1); btn.classList.add('on'); toast('已收藏'); return; }
+
+    // 没有原生按钮 → 直接打接口
+    var hash = getFormHash();
+    if (!hash) { toast('请先登录后再收藏'); return; }
+    fetch('home.php?mod=spacecp&ac=favorite&type=thread&id=' + tid +
+          '&formhash=' + encodeURIComponent(hash) +
+          '&infloat=yes&handlekey=k_favorite&inajax=1&ajaxtarget=fwin_content_k_favorite',
+          { credentials: 'same-origin' })
+      .then(function (r) { return r.text(); })
+      .then(function (t) {
+        if (t.indexOf('信息收藏成功') >= 0) {
+          var m = t.match(/'favid':'?(\d+)'?/);
+          setFav(tid, m ? m[1] : 1);
+          btn.classList.add('on');
+          toast('已收藏');
+        } else if (t.indexOf('请勿重复收藏') >= 0) {
+          setFav(tid, 1); btn.classList.add('on'); toast('已经收藏过了');
+        } else {
+          toast('收藏失败：' + (t.replace(/<[^>]+>/g, ' ').trim().slice(0, 30) || '未知原因'));
+        }
+      })
+      .catch(function () { toast('收藏请求失败'); });
+  }
+
+  /* ---------------- 悬浮快捷按钮组 ---------------- */
+  function buildQuickActions() {
+    if (document.getElementById('__pp_qa')) return;
+    var tid = getTid();
+    if (!tid && !document.querySelector('.plc')) return;
+
+    var favEl = firstOf(['#k_favorite', 'a[href*="ac=favorite"]', 'a[href*="action=favorite"]']);
+    var rateEl = firstOf(['#ak_rate', 'a[href*="mod=rate"]', 'a[href*="action=rate"]']);
+    var payEl = firstOf(['a[href*="action=pay"]', 'a[href*="action=buy"]']);
+    var repEl = firstOf(['.locked a[href*="action=reply"]', 'a[href*="action=reply"]']);
+    var magEl = findMagnet();
+    var attEl = firstOf(['[id^="attach_"]', 'dl.tattl', 'a[href*="mod=attachment"]']);
+
+    var items = [];
+    var favState = favStore()[tid];
+
+    // 收藏始终可点（没有原生按钮也能用接口）
+    items.push({
+      key: 'fav', icon: '★', label: '收藏',
+      on: !!favState,
+      run: function (btn) { doFavorite(tid, favEl, btn); }
+    });
+    if (rateEl) items.push({ key: 'rate', icon: '👍', label: '评分', on: !!LS.get('pp_rate', {})[tid],
+      run: function (btn) { rateEl.click(); var s = LS.get('pp_rate', {}); s[tid] = 1; LS.set('pp_rate', s); btn.classList.add('on'); } });
+    if (payEl) items.push({ key: 'pay', icon: '💰', label: '购买', run: function () { payEl.click(); } });
+    if (repEl) items.push({ key: 'reply', icon: '🔒', label: '回复', run: function () { repEl.click(); } });
+    if (magEl) items.push({ key: 'mag', icon: '🧲', label: '磁力', run: function () { magEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+    if (attEl) items.push({ key: 'att', icon: '📎', label: '附件', run: function () { attEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } });
+
+    var wrap = document.createElement('div');
+    wrap.id = '__pp_qa';
+
+    var list = document.createElement('div');
+    list.className = 'pp_qa_list';
+
+    items.forEach(function (it) {
+      var b = document.createElement('div');
+      b.className = 'pp_qa_item' + (it.on ? ' on' : '');
+      b.innerHTML = '<i>' + it.icon + '</i><span>' + it.label + '</span>';
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        try { it.run(b); } catch (err) { toast('操作失败'); }
+      });
+      list.appendChild(b);
+    });
+
+    var fab = document.createElement('div');
+    fab.className = 'pp_qa_fab';
+    fab.innerHTML = '⚡';
+    fab.addEventListener('click', function (e) {
+      e.stopPropagation();
+      wrap.classList.toggle('open');
+    });
+
+    wrap.appendChild(list);
+    wrap.appendChild(fab);
+    (document.body || document.documentElement).appendChild(wrap);
+
+    // 点击空白收起
+    document.addEventListener('click', function () { wrap.classList.remove('open'); }, true);
+  }
+
+  /* ---------------- 屏蔽用户 ---------------- */
+  function uidOf(a) {
+    if (!a) return null;
+    var h = a.getAttribute('href') || '';
+    var m = h.match(/uid=(\d+)/) || h.match(/space-uid-(\d+)/);
+    return m ? m[1] : null;
+  }
+
+  function applyBlock() {
+    var blocked = LS.get('pp_block', {});
+    var posts = document.querySelectorAll('.plc');
+    for (var i = 0; i < posts.length; i++) {
+      var p = posts[i];
+      var a = p.querySelector('.n5_nrhyxx a[href*="uid="], .authi a[href*="uid="], .n5_nrhyxx a');
+      var uid = uidOf(a);
+      if (!uid || !blocked[uid]) continue;
+      if (p.getAttribute('data-ppb') === '1') continue;
+      p.setAttribute('data-ppb', '1');
+      p.classList.add('pp-blocked');
+      var bar = document.createElement('div');
+      bar.className = 'pp-unblock';
+      bar.textContent = '已屏蔽 ' + (blocked[uid].name || '该用户') + ' · 点此展开';
+      bar.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var host = this.parentNode;
+        host.classList.remove('pp-blocked');
+        this.remove();
+      });
+      p.insertBefore(bar, p.firstChild);
+    }
+  }
+
+  function decorateAuthors() {
+    var blocked = LS.get('pp_block', {});
+    var posts = document.querySelectorAll('.plc');
+    for (var i = 0; i < posts.length; i++) {
+      var p = posts[i];
+      if (p.querySelector('.pp-blockbtn')) continue;
+      var a = p.querySelector('.n5_nrhyxx a[href*="uid="], .authi a[href*="uid="], .n5_nrhyxx a');
+      var uid = uidOf(a);
+      if (!uid) continue;
+      var name = (a.textContent || '').trim().slice(0, 12) || '该用户';
+
+      var host = p.querySelector('.n5_zthfcz') || p.querySelector('.hm') || p.querySelector('.n5_nrhyxx');
+      if (!host) continue;
+
+      var b = document.createElement('span');
+      b.className = 'pp-blockbtn' + (blocked[uid] ? ' on' : '');
+      b.textContent = '🙈 ' + (blocked[uid] ? '已屏蔽' : '屏蔽');
+      b.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var cur = LS.get('pp_block', {});
+        if (cur[uid]) { delete cur[uid]; this.classList.remove('on'); this.textContent = '🙈 屏蔽'; toast('已取消屏蔽'); }
+        else { cur[uid] = { name: name }; this.classList.add('on'); this.textContent = '🙈 已屏蔽'; toast('已屏蔽 ' + name); }
+        LS.set('pp_block', cur);
+        applyBlock();
+      });
+      host.appendChild(b);
+    }
+  }
+
+  /* ---------------- 启动 ---------------- */
+  function boot() {
+    try { applyBlock(); } catch (e) {}
+    try { buildQuickActions(); } catch (e) {}
+    try { decorateAuthors(); } catch (e) {}
+
+    // 楼层动态加载（下拉/翻页）时补挂
+    var pending = false;
+    try {
+      new MutationObserver(function () {
+        if (pending) return;
+        pending = true;
+        setTimeout(function () {
+          pending = false;
+          try { decorateAuthors(); } catch (e) {}
+          try { applyBlock(); } catch (e) {}
+        }, 600);
+      }).observe(document.body, { childList: true, subtree: true });
+    } catch (e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 400); });
+  } else {
+    setTimeout(boot, 400);
   }
 })();
