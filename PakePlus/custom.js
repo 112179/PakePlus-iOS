@@ -647,52 +647,56 @@ html.__pp_has_bar body { padding-bottom: calc(76px + env(safe-area-inset-bottom)
   }
 
   function doFavorite(tid, nativeEl, btn) {
-    var s = favStore();
-    var favid = s[tid];
+  var s = favStore();
+  var st = s[tid];
 
-    if (favid) {
-      // 取消收藏
-      var fd = new FormData();
-      fd.set('formhash', getFormHash());
-      fd.set('handlekey', 'a_delete_' + favid);
-      fd.set('deletesubmit', 'true');
-      fetch('home.php?mod=spacecp&ac=favorite&op=delete&favid=' + favid + '&type=all&inajax=1',
-        { method: 'POST', body: fd, credentials: 'same-origin' })
-        .then(function () {
-          setFav(tid, 0);
-          btn.classList.remove('on');
-          toast('已取消收藏');
-        })
-        .catch(function () { toast('取消失败，请检查登录状态'); });
-      return;
-    }
-
-    if (nativeEl) { nativeEl.click(); setFav(tid, 1); btn.classList.add('on'); toast('已收藏'); return; }
-
-    // 没有原生按钮 → 直接打接口
-    var hash = getFormHash();
-    if (!hash) { toast('请先登录后再收藏'); return; }
-    fetch('home.php?mod=spacecp&ac=favorite&type=thread&id=' + tid +
-          '&formhash=' + encodeURIComponent(hash) +
-          '&infloat=yes&handlekey=k_favorite&inajax=1&ajaxtarget=fwin_content_k_favorite',
-          { credentials: 'same-origin' })
-      .then(function (r) { return r.text(); })
-      .then(function (t) {
-        if (t.indexOf('信息收藏成功') >= 0) {
-          var m = t.match(/'favid':'?(\d+)'?/);
-          setFav(tid, m ? m[1] : 1);
-          btn.classList.add('on');
-          toast('已收藏');
-        } else if (t.indexOf('请勿重复收藏') >= 0) {
-          setFav(tid, 1); btn.classList.add('on'); toast('已经收藏过了');
-        } else {
-          toast('收藏失败：' + (t.replace(/<[^>]+>/g, ' ').trim().slice(0, 30) || '未知原因'));
-        }
-      })
-      .catch(function () { toast('收藏请求失败'); });
+  // 页面自带收藏按钮 → 直接点它（最稳，状态由站点维护）
+  if (nativeEl) {
+    nativeEl.click();
+    if (st) delete s[tid]; else s[tid] = { native: true };
+    LS.set('pp_fav', s);
+    btn.classList.toggle('on');
+    toast(st ? '已取消收藏' : '已收藏');
+    return;
   }
 
-  /* ---------------- 悬浮快捷按钮组 ---------------- */
+  // 没有原生按钮 → 走接口
+  var favid = st && st.favid;
+  if (favid) {
+    var fd = new FormData();
+    fd.set('formhash', getFormHash());
+    fd.set('handlekey', 'a_delete_' + favid);
+    fd.set('deletesubmit', 'true');
+    fetch('home.php?mod=spacecp&ac=favorite&op=delete&favid=' + favid + '&type=all&inajax=1',
+      { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(function () { delete s[tid]; LS.set('pp_fav', s); btn.classList.remove('on'); toast('已取消收藏'); })
+      .catch(function () { toast('取消失败，请检查登录状态'); });
+    return;
+  }
+
+  var hash = getFormHash();
+  if (!hash) { toast('请先登录后再收藏'); return; }
+  fetch('home.php?mod=spacecp&ac=favorite&type=thread&id=' + tid +
+        '&formhash=' + encodeURIComponent(hash) +
+        '&infloat=yes&handlekey=k_favorite&inajax=1&ajaxtarget=fwin_content_k_favorite',
+        { credentials: 'same-origin' })
+    .then(function (r) { return r.text(); })
+    .then(function (t) {
+      if (t.indexOf('信息收藏成功') >= 0) {
+        var m = t.match(/'favid':'?(\d+)'?/);
+        s[tid] = { favid: m ? m[1] : null }; LS.set('pp_fav', s);
+        btn.classList.add('on'); toast('已收藏');
+      } else if (t.indexOf('请勿重复收藏') >= 0) {
+        s[tid] = { favid: null }; LS.set('pp_fav', s);
+        btn.classList.add('on'); toast('已经收藏过了');
+      } else {
+        toast('收藏失败：' + ((t.replace(/<[^>]+>/g, ' ').trim().slice(0, 24)) || '未知原因'));
+      }
+    })
+    .catch(function () { toast('收藏请求失败'); });
+}
+
+/* ---------------- 悬浮快捷按钮组 ---------------- */
   function buildQuickActions() {
     if (document.getElementById('__pp_qa')) return;
     var tid = getTid();
@@ -750,8 +754,12 @@ html.__pp_has_bar body { padding-bottom: calc(76px + env(safe-area-inset-bottom)
     wrap.appendChild(fab);
     (document.body || document.documentElement).appendChild(wrap);
 
-    // 点击空白收起
-    document.addEventListener('click', function () { wrap.classList.remove('open'); }, true);
+    // 点击空白收起（注意 capture 阶段会先于按钮自身触发，需排除按钮区）
+    document.addEventListener('click', function (e) {
+      var w = document.getElementById('__pp_qa');
+      if (w && e.target && w.contains(e.target)) return;
+      if (w) w.classList.remove('open');
+    }, true);
   }
 
   /* ---------------- 屏蔽用户 ---------------- */
